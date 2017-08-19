@@ -19,6 +19,7 @@ import android.widget.TextView;
 import com.rivendell.rxdemo.databinding.ActivityLoginBinding;
 
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import io.reactivex.Observable;
 import io.reactivex.ObservableEmitter;
@@ -141,14 +142,29 @@ public class LoginActivity extends AppCompatActivity {
                 }
             }).subscribeOn(Schedulers.newThread())
                     .retryWhen(new Function<Observable<Throwable>, ObservableSource<?>>() {
+                        //https://en.wikipedia.org/wiki/Exponential_backoff
+                        final AtomicInteger retryCounter = new AtomicInteger(0);
+                        long INIT_INTERVAL = 500L;
+                        long MAX_RETRY_INTERVAL = 10 * 1000L;
+                        int MAX_RETRY_TIMES = 10;
                         @Override
                         public ObservableSource<?> apply(@NonNull Observable<Throwable> throwableObservable) throws Exception {
                             return throwableObservable.flatMap(new Function<Throwable, ObservableSource<?>>() {
                                 @Override
                                 public ObservableSource<?> apply(@NonNull Throwable throwable) throws Exception {
                                     if (throwable instanceof RuntimeException) {
-                                        Timber.i("throwable");
-                                        return Observable.just(new Object()).delay(1, TimeUnit.SECONDS);
+                                        int retries = retryCounter.incrementAndGet();
+                                        int multiplier = (int)(Math.random() * (int)(Math.pow(2.0, (double) retries) - 1));
+                                        long retryInterval = multiplier * INIT_INTERVAL;
+                                        if (retryInterval > MAX_RETRY_INTERVAL) {
+                                            retryInterval = MAX_RETRY_INTERVAL;
+                                        }
+
+                                        if (retries <= MAX_RETRY_TIMES) {
+                                            Timber.i("RuntimeException, retries(%d) with sleep(%d) milliseconds", retries, retryInterval);
+                                            return Observable.timer(retryInterval, TimeUnit.MILLISECONDS);
+                                        }
+
                                     }
                                     return Observable.error(throwable);
                                 }
