@@ -76,7 +76,13 @@ public class LoginActivity extends AppCompatActivity {
     @Override
     public void onBackPressed() {
         if (isLoging) {
-            cancelLoginRequest();
+            if (mDispose != null) {
+                if (!mDispose.isDisposed()) {
+                    mDispose.dispose();
+                }
+            }
+            showProgress(false);
+            isLoging = false;
             return;
         }
         super.onBackPressed();
@@ -187,13 +193,15 @@ public class LoginActivity extends AppCompatActivity {
                         @Override
                         public void onError(@NonNull Throwable e) {
                             Timber.i("onError");
-                            cancelLoginRequest();
+                            showProgress(false);
+                            isLoging = false;
                         }
 
                         @Override
                         public void onComplete() {
                             Timber.i("onComplete");
-                            cancelLoginRequest();
+                            showProgress(false);
+                            isLoging = false;
                         }
                     });
         }
@@ -248,18 +256,6 @@ public class LoginActivity extends AppCompatActivity {
             // and hide the relevant UI components.
             mBinding.loginProgress.setVisibility(show ? View.VISIBLE : View.GONE);
             mBinding.loginForm.setVisibility(show ? View.GONE : View.VISIBLE);
-        }
-    }
-
-    private void cancelLoginRequest() {
-        if (isLoging) {
-            if (mDispose != null) {
-                if (!mDispose.isDisposed()) {
-                    mDispose.dispose();
-                }
-            }
-            showProgress(false);
-            isLoging = false;
         }
     }
 
