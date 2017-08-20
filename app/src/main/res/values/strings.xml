@@ -2,7 +2,7 @@
     <string name="app_name">RxDemo</string>
     <string name="prompt_username">Username</string>
     <string name="prompt_password">Password</string>
-    <string name="action_register">Register</string>
+    <string name="action_cancel">Cancel</string>
     <string name="action_sign_in">Sign in</string>
     <string name="action_sign_in_short">Sign in</string>
     <string name="error_invalid_username">This username is invalid</string>

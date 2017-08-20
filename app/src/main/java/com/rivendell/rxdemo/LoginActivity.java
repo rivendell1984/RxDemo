@@ -30,6 +30,7 @@ import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.annotations.NonNull;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.functions.Function;
+import io.reactivex.internal.disposables.DisposableHelper;
 import io.reactivex.schedulers.Schedulers;
 import timber.log.Timber;
 
@@ -61,26 +62,29 @@ public class LoginActivity extends AppCompatActivity {
                 attemptLogin();
             }
         });
+
+        mBinding.cancelButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if (isLoging) {
+                    dispose();
+                    showProgress(false);
+                    isLoging = false;
+                }
+            }
+        });
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (mDispose != null) {
-            if (!mDispose.isDisposed()) {
-                mDispose.dispose();
-            }
-        }
+        dispose();
     }
 
     @Override
     public void onBackPressed() {
         if (isLoging) {
-            if (mDispose != null) {
-                if (!mDispose.isDisposed()) {
-                    mDispose.dispose();
-                }
-            }
+            dispose();
             showProgress(false);
             isLoging = false;
             return;
@@ -141,9 +145,15 @@ public class LoginActivity extends AppCompatActivity {
             showProgress(true);
 
             Observable.create(new ObservableOnSubscribe<Integer>() {
+                final AtomicInteger subscribeCounter = new AtomicInteger(0);
+                int TOLERABLE_RETRY_TIMES = 5;
                 @Override
                 public void subscribe(@NonNull ObservableEmitter<Integer> e) throws Exception {
                     Timber.i("subscribing");
+                    int subscribeCount = subscribeCounter.incrementAndGet();
+                    if(subscribeCount > TOLERABLE_RETRY_TIMES) {
+                        e.onNext(new Integer(subscribeCount));
+                    }
                     e.onError(new RuntimeException("always fails"));
                 }
             }).subscribeOn(Schedulers.newThread())
@@ -158,6 +168,7 @@ public class LoginActivity extends AppCompatActivity {
                             return throwableObservable.flatMap(new Function<Throwable, ObservableSource<?>>() {
                                 @Override
                                 public ObservableSource<?> apply(@NonNull Throwable throwable) throws Exception {
+                                    //Only retry when it's RuntimeException
                                     if (throwable instanceof RuntimeException) {
                                         int retries = retryCounter.incrementAndGet();
                                         int multiplier = (int)(Math.random() * (int)(Math.pow(2.0, (double) retries) - 1));
@@ -187,7 +198,7 @@ public class LoginActivity extends AppCompatActivity {
 
                         @Override
                         public void onNext(@NonNull Integer integer) {
-
+                            mBinding.cancelButton.setVisibility((integer >= 5) ? View.VISIBLE : View.GONE);
                         }
 
                         @Override
@@ -256,6 +267,22 @@ public class LoginActivity extends AppCompatActivity {
             // and hide the relevant UI components.
             mBinding.loginProgress.setVisibility(show ? View.VISIBLE : View.GONE);
             mBinding.loginForm.setVisibility(show ? View.GONE : View.VISIBLE);
+        }
+
+        if(!show) {
+            mBinding.cancelButton.setVisibility(View.GONE);
+        }
+
+    }
+
+    /**
+     * Cancels the upstream's disposable.
+     */
+    private final void dispose() {
+        if (mDispose != null) {
+            if (!mDispose.isDisposed()) {
+                mDispose.dispose();
+            }
         }
     }
 
