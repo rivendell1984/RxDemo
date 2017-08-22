@@ -30,6 +30,7 @@ import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.annotations.NonNull;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.functions.BiFunction;
+import io.reactivex.functions.Consumer;
 import io.reactivex.functions.Function;
 import io.reactivex.internal.disposables.DisposableHelper;
 import io.reactivex.schedulers.Schedulers;
@@ -146,18 +147,27 @@ public class LoginActivity extends AppCompatActivity {
             showProgress(true);
 
             Observable.create(new ObservableOnSubscribe<Integer>() {
-                final AtomicInteger subscribeCounter = new AtomicInteger(0);
-                int TOLERABLE_RETRY_TIMES = 5;
+
                 @Override
                 public void subscribe(@NonNull ObservableEmitter<Integer> e) throws Exception {
                     Timber.i("subscribing");
-                    int subscribeCount = subscribeCounter.incrementAndGet();
-                    if(subscribeCount > TOLERABLE_RETRY_TIMES) {
-                        e.onNext(new Integer(subscribeCount));
-                    }
                     e.onError(new RuntimeException("always fails"));
                 }
-            }).subscribeOn(Schedulers.newThread())
+            }).subscribeOn(Schedulers.io())
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .doOnError(new Consumer<Throwable>() {
+                        final AtomicInteger subscribeCounter = new AtomicInteger(0);
+                        int TOLERABLE_RETRY_TIMES = 5;
+                        @Override
+                        public void accept(Throwable throwable) throws Exception {
+                            int subscribeCount = subscribeCounter.incrementAndGet();
+                            Timber.i("doOnError:%d", subscribeCount);
+                            if(subscribeCount > TOLERABLE_RETRY_TIMES) {
+                                mBinding.cancelButton.setVisibility(View.VISIBLE);
+                            }
+                        }
+                    })
+                    /*
                     .retryWhen(new Function<Observable<Throwable>, ObservableSource<?>>() {
                         @Override
                         public ObservableSource<?> apply(@NonNull final Observable<Throwable> throwableObservable) throws Exception {
@@ -165,7 +175,7 @@ public class LoginActivity extends AppCompatActivity {
                                 @Override
                                 public Object apply(@NonNull Throwable throwable, @NonNull Integer retryCount) throws Exception {
                                     if(throwable instanceof RuntimeException) {
-                                        if(retryCount == 5) {
+                                        if(retryCount == 8) {
                                             Timber.i("throwable");
                                             return throwable;
                                         }
@@ -196,7 +206,8 @@ public class LoginActivity extends AppCompatActivity {
                             });
                         }
                     })
-                    /*
+                    */
+                    .observeOn(Schedulers.computation())
                     .retryWhen(new Function<Observable<Throwable>, ObservableSource<?>>() {
                         //https://en.wikipedia.org/wiki/Exponential_backoff
                         final AtomicInteger retryCounter = new AtomicInteger(0);
@@ -217,7 +228,7 @@ public class LoginActivity extends AppCompatActivity {
                                             retryInterval = MAX_RETRY_INTERVAL;
                                         }
 
-                                        if (retries <= MAX_RETRY_TIMES) {
+                                        if (retries < MAX_RETRY_TIMES) {
                                             Timber.i("RuntimeException, retries(%d) with sleep(%d) milliseconds", retries, retryInterval);
                                             return Observable.timer(retryInterval, TimeUnit.MILLISECONDS);
                                         }
@@ -227,9 +238,8 @@ public class LoginActivity extends AppCompatActivity {
                                 }
                             });
                         }
-                    })*/
+                    })
                     .observeOn(AndroidSchedulers.mainThread())
-
                     .subscribe(new Observer<Integer>() {
 
                         @Override
@@ -240,7 +250,7 @@ public class LoginActivity extends AppCompatActivity {
 
                         @Override
                         public void onNext(@NonNull Integer integer) {
-                            mBinding.cancelButton.setVisibility((integer >= 5) ? View.VISIBLE : View.GONE);
+
                         }
 
                         @Override
