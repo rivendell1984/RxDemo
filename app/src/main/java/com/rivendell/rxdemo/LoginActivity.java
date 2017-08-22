@@ -29,6 +29,7 @@ import io.reactivex.Observer;
 import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.annotations.NonNull;
 import io.reactivex.disposables.Disposable;
+import io.reactivex.functions.BiFunction;
 import io.reactivex.functions.Function;
 import io.reactivex.internal.disposables.DisposableHelper;
 import io.reactivex.schedulers.Schedulers;
@@ -158,6 +159,45 @@ public class LoginActivity extends AppCompatActivity {
                 }
             }).subscribeOn(Schedulers.newThread())
                     .retryWhen(new Function<Observable<Throwable>, ObservableSource<?>>() {
+                        @Override
+                        public ObservableSource<?> apply(@NonNull final Observable<Throwable> throwableObservable) throws Exception {
+                            return throwableObservable.zipWith(Observable.range(1, 10), new BiFunction<Throwable, Integer, Object>() {
+                                @Override
+                                public Object apply(@NonNull Throwable throwable, @NonNull Integer retryCount) throws Exception {
+                                    if(throwable instanceof RuntimeException) {
+                                        if(retryCount == 5) {
+                                            Timber.i("throwable");
+                                            return throwable;
+                                        }
+                                        return retryCount;
+                                    } else {
+                                        return throwable;
+                                    }
+                                }
+                            }).flatMap(new Function<Object, ObservableSource<?>>() {
+                                private long INIT_INTERVAL = 500L;
+                                private long MAX_RETRY_INTERVAL = 10 * 1000L;
+                                @Override
+                                public ObservableSource<?> apply(@NonNull Object obj) throws Exception {
+                                    if(obj instanceof Integer) {
+                                        Integer retryCount = (Integer) obj;
+                                        int multiplier = (int)(Math.random() * (int)(Math.pow(2.0, (double) retryCount) - 1));
+                                        long retryInterval = multiplier * INIT_INTERVAL;
+                                        if (retryInterval > MAX_RETRY_INTERVAL) {
+                                            retryInterval = MAX_RETRY_INTERVAL;
+                                        }
+                                        Timber.i("RuntimeException, retries(%d) with sleep(%d) milliseconds", retryCount, retryInterval);
+                                        return Observable.timer(retryInterval, TimeUnit.MILLISECONDS);
+                                    } else {
+                                        Timber.i("apply throwable");
+                                        return Observable.error((Throwable)obj);
+                                    }
+                                }
+                            });
+                        }
+                    })
+                    /*
+                    .retryWhen(new Function<Observable<Throwable>, ObservableSource<?>>() {
                         //https://en.wikipedia.org/wiki/Exponential_backoff
                         final AtomicInteger retryCounter = new AtomicInteger(0);
                         long INIT_INTERVAL = 500L;
@@ -187,7 +227,9 @@ public class LoginActivity extends AppCompatActivity {
                                 }
                             });
                         }
-                    }).observeOn(AndroidSchedulers.mainThread())
+                    })*/
+                    .observeOn(AndroidSchedulers.mainThread())
+
                     .subscribe(new Observer<Integer>() {
 
                         @Override
